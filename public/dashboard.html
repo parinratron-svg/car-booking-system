@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>หน้าหลัก - ระบบจองรถ</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a href="/dashboard.html" class="navbar-brand">🚗 ระบบจองรถ</a>
+    <div class="navbar-user">
+      <span id="userName"></span>
+      <button class="btn btn-outline btn-sm" onclick="logout()">ออกจากระบบ</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div id="alertBox"></div>
+
+    <!-- Search & Filter -->
+    <div class="card">
+      <h2>ค้นหาและกรองรถ</h2>
+      <div class="toolbar">
+        <div class="form-group">
+          <label>ค้นหา (ชื่อรถ / ทะเบียน)</label>
+          <input type="text" id="searchInput" class="form-control" placeholder="พิมพ์ชื่อรถหรือทะเบียน...">
+        </div>
+        <div class="form-group">
+          <label>ประเภทรถ</label>
+          <select id="typeFilter" class="form-control">
+            <option value="">ทั้งหมด</option>
+            <option value="sedan">รถเก๋ง</option>
+            <option value="suv">รถ SUV</option>
+            <option value="pickup">รถกระบะ</option>
+            <option value="van">รถตู้</option>
+            <option value="truck">รถบรรทุก</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>สถานะ</label>
+          <select id="statusFilter" class="form-control">
+            <option value="">ทั้งหมด</option>
+            <option value="available">ว่าง</option>
+            <option value="unavailable">ไม่ว่าง</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="loadVehicles()">ค้นหา</button>
+      </div>
+    </div>
+
+    <!-- Vehicle List -->
+    <div class="card">
+      <h2>รายการรถ (<span id="vehicleCount">0</span> คัน)</h2>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>ชื่อรถ</th>
+              <th>ทะเบียน</th>
+              <th>ประเภท</th>
+              <th>สถานะ</th>
+              <th>จัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="vehicleTable"></tbody>
+        </table>
+      </div>
+      <div id="emptyVehicles" class="empty-state hidden">ไม่พบข้อมูลรถ</div>
+    </div>
+
+    <!-- My Bookings -->
+    <div class="card">
+      <h2>ประวัติการจองของฉัน</h2>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>รถ</th>
+              <th>ทะเบียน</th>
+              <th>วันที่เริ่ม</th>
+              <th>วันที่สิ้นสุด</th>
+              <th>สถานะ</th>
+              <th>จัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="bookingTable"></tbody>
+        </table>
+      </div>
+      <div id="emptyBookings" class="empty-state hidden">ยังไม่มีประวัติการจอง</div>
+    </div>
+  </div>
+
+  <!-- Booking Modal -->
+  <div class="modal-overlay" id="bookingModal">
+    <div class="modal">
+      <h3>จองรถ</h3>
+      <form id="bookingForm">
+        <input type="hidden" id="bookingVehicleId">
+        <div class="form-group">
+          <label>รถที่เลือก</label>
+          <input type="text" id="bookingVehicleName" class="form-control" readonly>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>วันที่เริ่ม</label>
+            <input type="date" id="startDate" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label>วันที่สิ้นสุด</label>
+            <input type="date" id="endDate" class="form-control" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>วัตถุประสงค์</label>
+          <textarea id="purpose" class="form-control" rows="3" placeholder="ระบุวัตถุประสงค์การใช้รถ"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" onclick="closeBookingModal()">ยกเลิก</button>
+          <button type="submit" class="btn btn-primary">ยืนยันการจอง</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    if (!requireAuth()) throw new Error('Not authenticated');
+
+    const user = getUser();
+    if (user.role === 'admin') {
+      window.location.href = '/admin.html';
+    }
+
+    document.getElementById('userName').textContent = `สวัสดี, ${user.fullName}`;
+
+    async function loadVehicles() {
+      const search = document.getElementById('searchInput').value;
+      const type = document.getElementById('typeFilter').value;
+      const status = document.getElementById('statusFilter').value;
+
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      if (type) params.append('type', type);
+      if (status) params.append('status', status);
+
+      const result = await apiRequest(`/vehicles?${params.toString()}`);
+      if (!result) return;
+
+      const tbody = document.getElementById('vehicleTable');
+      const empty = document.getElementById('emptyVehicles');
+      document.getElementById('vehicleCount').textContent = result.total;
+
+      if (result.data.length === 0) {
+        tbody.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+      }
+
+      empty.classList.add('hidden');
+      tbody.innerHTML = result.data.map((v) => `
+        <tr>
+          <td>${v.name}</td>
+          <td>${v.license_plate}</td>
+          <td>${getVehicleTypeLabel(v.vehicle_type)}</td>
+          <td>${getStatusBadge(v.status)}</td>
+          <td>
+            ${v.status === 'available'
+              ? `<button class="btn btn-primary btn-sm" onclick="openBookingModal(${v.id}, '${v.name}')">จอง</button>`
+              : '<span class="badge badge-unavailable">ไม่ว่าง</span>'}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function loadBookings() {
+      const result = await apiRequest('/bookings');
+      if (!result) return;
+
+      const tbody = document.getElementById('bookingTable');
+      const empty = document.getElementById('emptyBookings');
+
+      if (result.data.length === 0) {
+        tbody.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+      }
+
+      empty.classList.add('hidden');
+      tbody.innerHTML = result.data.map((b) => `
+        <tr>
+          <td>${b.vehicle_name}</td>
+          <td>${b.license_plate}</td>
+          <td>${formatDate(b.start_date)}</td>
+          <td>${formatDate(b.end_date)}</td>
+          <td>${getStatusBadge(b.status)}</td>
+          <td>
+            ${b.status === 'pending' || b.status === 'approved'
+              ? `<button class="btn btn-danger btn-sm" onclick="cancelBooking(${b.id})">ยกเลิก</button>`
+              : '-'}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function openBookingModal(id, name) {
+      document.getElementById('bookingVehicleId').value = id;
+      document.getElementById('bookingVehicleName').value = name;
+      document.getElementById('startDate').value = '';
+      document.getElementById('endDate').value = '';
+      document.getElementById('purpose').value = '';
+      document.getElementById('bookingModal').classList.add('show');
+    }
+
+    function closeBookingModal() {
+      document.getElementById('bookingModal').classList.remove('show');
+    }
+
+    document.getElementById('bookingForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const result = await apiRequest('/bookings', {
+        method: 'POST',
+        body: JSON.stringify({
+          vehicle_id: parseInt(document.getElementById('bookingVehicleId').value),
+          start_date: document.getElementById('startDate').value,
+          end_date: document.getElementById('endDate').value,
+          purpose: document.getElementById('purpose').value,
+        }),
+      });
+
+      if (!result) return;
+
+      if (result.success) {
+        showAlert('alertBox', result.message, 'success');
+        closeBookingModal();
+        loadVehicles();
+        loadBookings();
+      } else {
+        showAlert('alertBox', result.message);
+      }
+    });
+
+    async function cancelBooking(id) {
+      if (!confirm('ต้องการยกเลิกการจองนี้?')) return;
+
+      const result = await apiRequest(`/bookings/${id}/cancel`, { method: 'PATCH' });
+      if (!result) return;
+
+      showAlert('alertBox', result.message, result.success ? 'success' : 'error');
+      loadBookings();
+      loadVehicles();
+    }
+
+    document.getElementById('searchInput').addEventListener('keyup', (e) => {
+      if (e.key === 'Enter') loadVehicles();
+    });
+
+    loadVehicles();
+    loadBookings();
+  </script>
+</body>
+</html>

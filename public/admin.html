@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>จัดการระบบ - ระบบจองรถ</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a href="/admin.html" class="navbar-brand">🚗 ระบบจองรถ (Admin)</a>
+    <div class="navbar-user">
+      <span id="userName"></span>
+      <button class="btn btn-outline btn-sm" onclick="logout()">ออกจากระบบ</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div id="alertBox"></div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="vehicles">จัดการรถ</button>
+      <button class="tab" data-tab="bookings">รายการจอง</button>
+      <button class="tab" data-tab="reports">รายงาน</button>
+    </div>
+
+    <!-- Tab: Vehicles -->
+    <div class="tab-content active" id="tab-vehicles">
+      <div class="card">
+        <h2>เพิ่มข้อมูลรถใหม่</h2>
+        <form id="addVehicleForm">
+          <div class="form-row">
+            <div class="form-group">
+              <label>ชื่อรถ *</label>
+              <input type="text" id="vName" class="form-control" placeholder="เช่น Toyota Camry" required>
+            </div>
+            <div class="form-group">
+              <label>ทะเบียนรถ *</label>
+              <input type="text" id="vPlate" class="form-control" placeholder="เช่น กข-1234" required>
+            </div>
+            <div class="form-group">
+              <label>ประเภทรถ *</label>
+              <select id="vType" class="form-control" required>
+                <option value="">เลือกประเภท</option>
+                <option value="sedan">รถเก๋ง</option>
+                <option value="suv">รถ SUV</option>
+                <option value="pickup">รถกระบะ</option>
+                <option value="van">รถตู้</option>
+                <option value="truck">รถบรรทุก</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>สถานะ</label>
+              <select id="vStatus" class="form-control">
+                <option value="available">ว่าง</option>
+                <option value="unavailable">ไม่ว่าง</option>
+              </select>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-success">เพิ่มรถ</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>ค้นหาและกรองรถ</h2>
+        <div class="toolbar">
+          <div class="form-group">
+            <label>ค้นหา</label>
+            <input type="text" id="searchInput" class="form-control" placeholder="ชื่อรถ / ทะเบียน">
+          </div>
+          <div class="form-group">
+            <label>ประเภท</label>
+            <select id="typeFilter" class="form-control">
+              <option value="">ทั้งหมด</option>
+              <option value="sedan">รถเก๋ง</option>
+              <option value="suv">รถ SUV</option>
+              <option value="pickup">รถกระบะ</option>
+              <option value="van">รถตู้</option>
+              <option value="truck">รถบรรทุก</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>สถานะ</label>
+            <select id="statusFilter" class="form-control">
+              <option value="">ทั้งหมด</option>
+              <option value="available">ว่าง</option>
+              <option value="unavailable">ไม่ว่าง</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="loadVehicles()">ค้นหา</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>รายการรถทั้งหมด (<span id="vehicleCount">0</span>)</h2>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>ชื่อรถ</th>
+                <th>ทะเบียน</th>
+                <th>ประเภท</th>
+                <th>สถานะ</th>
+                <th>จัดการ</th>
+              </tr>
+            </thead>
+            <tbody id="vehicleTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Bookings -->
+    <div class="tab-content" id="tab-bookings">
+      <div class="card">
+        <h2>รายการจองทั้งหมด</h2>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>ผู้จอง</th>
+                <th>รถ</th>
+                <th>ทะเบียน</th>
+                <th>วันที่เริ่ม</th>
+                <th>วันที่สิ้นสุด</th>
+                <th>สถานะ</th>
+                <th>จัดการ</th>
+              </tr>
+            </thead>
+            <tbody id="bookingTable"></tbody>
+          </table>
+        </div>
+        <div id="emptyBookings" class="empty-state hidden">ยังไม่มีรายการจอง</div>
+      </div>
+    </div>
+
+    <!-- Tab: Reports -->
+    <div class="tab-content" id="tab-reports">
+      <div class="stats-grid" id="statsGrid"></div>
+
+      <div class="card">
+        <h2 id="reportTitle1">รายงานรายการรถทั้งหมด</h2>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>ชื่อรถ</th>
+                <th>ทะเบียน</th>
+                <th>ประเภท</th>
+                <th>สถานะ</th>
+              </tr>
+            </thead>
+            <tbody id="reportAllVehicles"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>รายงานสรุปจำนวนรถตามประเภท</h2>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>ประเภทรถ</th>
+                <th>จำนวน</th>
+              </tr>
+            </thead>
+            <tbody id="reportByType"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>รายงานสถานะการใช้งานรถ</h2>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>สถานะ</th>
+                <th>จำนวน</th>
+              </tr>
+            </thead>
+            <tbody id="reportByStatus"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    if (!requireAuth()) throw new Error('Not authenticated');
+
+    const user = getUser();
+    if (user.role !== 'admin') {
+      window.location.href = '/dashboard.html';
+    }
+
+    document.getElementById('userName').textContent = `Admin: ${user.fullName}`;
+
+    // Tab switching
+    document.querySelectorAll('.tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach((c) => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+
+        if (tab.dataset.tab === 'bookings') loadBookings();
+        if (tab.dataset.tab === 'reports') loadReports();
+      });
+    });
+
+    // Add Vehicle
+    document.getElementById('addVehicleForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const result = await apiRequest('/vehicles', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: document.getElementById('vName').value.trim(),
+          license_plate: document.getElementById('vPlate').value.trim(),
+          vehicle_type: document.getElementById('vType').value,
+          status: document.getElementById('vStatus').value,
+        }),
+      });
+
+      if (!result) return;
+
+      showAlert('alertBox', result.message, result.success ? 'success' : 'error');
+
+      if (result.success) {
+        document.getElementById('addVehicleForm').reset();
+        loadVehicles();
+      }
+    });
+
+    async function loadVehicles() {
+      const search = document.getElementById('searchInput').value;
+      const type = document.getElementById('typeFilter').value;
+      const status = document.getElementById('statusFilter').value;
+
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      if (type) params.append('type', type);
+      if (status) params.append('status', status);
+
+      const result = await apiRequest(`/vehicles?${params.toString()}`);
+      if (!result) return;
+
+      document.getElementById('vehicleCount').textContent = result.total;
+      document.getElementById('vehicleTable').innerHTML = result.data.map((v) => `
+        <tr>
+          <td>${v.name}</td>
+          <td>${v.license_plate}</td>
+          <td>${getVehicleTypeLabel(v.vehicle_type)}</td>
+          <td>${getStatusBadge(v.status)}</td>
+          <td>
+            <button class="btn btn-danger btn-sm" onclick="deleteVehicle(${v.id}, '${v.name}')">ลบ</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function deleteVehicle(id, name) {
+      if (!confirm(`ต้องการลบรถ "${name}" ?`)) return;
+
+      const result = await apiRequest(`/vehicles/${id}`, { method: 'DELETE' });
+      if (!result) return;
+
+      showAlert('alertBox', result.message, result.success ? 'success' : 'error');
+      loadVehicles();
+    }
+
+    async function loadBookings() {
+      const result = await apiRequest('/bookings');
+      if (!result) return;
+
+      const empty = document.getElementById('emptyBookings');
+      if (result.data.length === 0) {
+        document.getElementById('bookingTable').innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+      }
+
+      empty.classList.add('hidden');
+      document.getElementById('bookingTable').innerHTML = result.data.map((b) => `
+        <tr>
+          <td>${b.user_name}</td>
+          <td>${b.vehicle_name}</td>
+          <td>${b.license_plate}</td>
+          <td>${formatDate(b.start_date)}</td>
+          <td>${formatDate(b.end_date)}</td>
+          <td>${getStatusBadge(b.status)}</td>
+          <td>
+            ${b.status === 'pending' ? `
+              <button class="btn btn-success btn-sm" onclick="updateBookingStatus(${b.id}, 'approved')">อนุมัติ</button>
+              <button class="btn btn-danger btn-sm" onclick="updateBookingStatus(${b.id}, 'rejected')">ปฏิเสธ</button>
+            ` : '-'}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function updateBookingStatus(id, status) {
+      const label = status === 'approved' ? 'อนุมัติ' : 'ปฏิเสธ';
+      if (!confirm(`ต้องการ${label}การจองนี้?`)) return;
+
+      const result = await apiRequest(`/bookings/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      });
+
+      if (!result) return;
+      showAlert('alertBox', result.message, result.success ? 'success' : 'error');
+      loadBookings();
+      loadVehicles();
+    }
+
+    async function loadReports() {
+      const result = await apiRequest('/reports');
+      if (!result) return;
+
+      const { allVehicles, vehiclesByType, vehiclesByStatus } = result.data;
+
+      // Stats cards
+      const available = vehiclesByStatus.items.find((i) => i.status === 'available')?.count || 0;
+      const unavailable = vehiclesByStatus.items.find((i) => i.status === 'unavailable')?.count || 0;
+
+      document.getElementById('statsGrid').innerHTML = `
+        <div class="stat-card">
+          <div class="stat-value">${allVehicles.total}</div>
+          <div class="stat-label">รถทั้งหมด</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${available}</div>
+          <div class="stat-label">รถว่าง</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${unavailable}</div>
+          <div class="stat-label">รถไม่ว่าง</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${vehiclesByType.items.length}</div>
+          <div class="stat-label">ประเภทรถ</div>
+        </div>
+      `;
+
+      document.getElementById('reportAllVehicles').innerHTML = allVehicles.items.map((v) => `
+        <tr>
+          <td>${v.name}</td>
+          <td>${v.license_plate}</td>
+          <td>${getVehicleTypeLabel(v.vehicle_type)}</td>
+          <td>${getStatusBadge(v.status)}</td>
+        </tr>
+      `).join('');
+
+      document.getElementById('reportByType').innerHTML = vehiclesByType.items.map((item) => `
+        <tr>
+          <td>${getVehicleTypeLabel(item.vehicle_type)}</td>
+          <td>${item.count} คัน</td>
+        </tr>
+      `).join('');
+
+      document.getElementById('reportByStatus').innerHTML = vehiclesByStatus.items.map((item) => `
+        <tr>
+          <td>${item.statusLabel}</td>
+          <td>${item.count} คัน</td>
+        </tr>
+      `).join('');
+    }
+
+    loadVehicles();
+  </script>
+</body>
+</html>
