@@ -51,6 +51,14 @@ body {
   max-width: 420px;
 }
 
+.login-card-wide {
+  max-width: 480px;
+}
+
+.auth-tabs {
+  margin-bottom: 1.5rem;
+}
+
 .login-card h1 {
   text-align: center;
   color: var(--primary);
@@ -494,4 +502,102 @@ tbody tr:hover {
   text-align: center;
   padding: 2rem;
   color: var(--gray-500);
+}
+
+/* Vehicle Images */
+.vehicle-img {
+  width: 80px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--gray-100);
+}
+
+.vehicle-img-lg {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--gray-100);
+}
+
+.image-preview {
+  width: 200px;
+  height: 140px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 2px dashed var(--gray-300);
+  background: var(--gray-50);
+  margin-top: 0.5rem;
+}
+
+.file-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.file-input-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border: 2px dashed var(--gray-300);
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--gray-700);
+  font-size: 0.9rem;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.file-input-label:hover {
+  border-color: var(--primary);
+  background: #eff6ff;
+}
+
+.file-input-label input[type="file"] {
+  display: none;
+}
+
+/* Vehicle Card Grid */
+.vehicle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.25rem;
+}
+
+.vehicle-card {
+  background: white;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.vehicle-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+.vehicle-card-body {
+  padding: 1rem;
+}
+
+.vehicle-card-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.vehicle-card-meta {
+  font-size: 0.85rem;
+  color: var(--gray-500);
+  margin-bottom: 0.75rem;
+}
+
+.vehicle-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 }

@@ -52,20 +52,7 @@
     <!-- Vehicle List -->
     <div class="card">
       <h2>รายการรถ (<span id="vehicleCount">0</span> คัน)</h2>
-      <div class="table-responsive">
-        <table>
-          <thead>
-            <tr>
-              <th>ชื่อรถ</th>
-              <th>ทะเบียน</th>
-              <th>ประเภท</th>
-              <th>สถานะ</th>
-              <th>จัดการ</th>
-            </tr>
-          </thead>
-          <tbody id="vehicleTable"></tbody>
-        </table>
-      </div>
+      <div class="vehicle-grid" id="vehicleGrid"></div>
       <div id="emptyVehicles" class="empty-state hidden">ไม่พบข้อมูลรถ</div>
     </div>
 
@@ -99,7 +86,8 @@
         <input type="hidden" id="bookingVehicleId">
         <div class="form-group">
           <label>รถที่เลือก</label>
-          <input type="text" id="bookingVehicleName" class="form-control" readonly>
+          <img id="bookingVehicleImage" class="image-preview" src="/images/car-placeholder.svg" alt="รูปรถ">
+          <input type="text" id="bookingVehicleName" class="form-control" readonly style="margin-top: 0.75rem;">
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -147,29 +135,34 @@
       const result = await apiRequest(`/vehicles?${params.toString()}`);
       if (!result) return;
 
-      const tbody = document.getElementById('vehicleTable');
+      const grid = document.getElementById('vehicleGrid');
       const empty = document.getElementById('emptyVehicles');
       document.getElementById('vehicleCount').textContent = result.total;
 
       if (result.data.length === 0) {
-        tbody.innerHTML = '';
+        grid.innerHTML = '';
         empty.classList.remove('hidden');
         return;
       }
 
       empty.classList.add('hidden');
-      tbody.innerHTML = result.data.map((v) => `
-        <tr>
-          <td>${v.name}</td>
-          <td>${v.license_plate}</td>
-          <td>${getVehicleTypeLabel(v.vehicle_type)}</td>
-          <td>${getStatusBadge(v.status)}</td>
-          <td>
-            ${v.status === 'available'
-              ? `<button class="btn btn-primary btn-sm" onclick="openBookingModal(${v.id}, '${v.name}')">จอง</button>`
-              : '<span class="badge badge-unavailable">ไม่ว่าง</span>'}
-          </td>
-        </tr>
+      grid.innerHTML = result.data.map((v) => `
+        <div class="vehicle-card">
+          <img class="vehicle-img-lg" src="${getVehicleImageUrl(v.image)}" alt="${v.name}">
+          <div class="vehicle-card-body">
+            <div class="vehicle-card-title">${v.name}</div>
+            <div class="vehicle-card-meta">
+              ทะเบียน: ${v.license_plate}<br>
+              ประเภท: ${getVehicleTypeLabel(v.vehicle_type)}
+            </div>
+            <div class="vehicle-card-footer">
+              ${getStatusBadge(v.status)}
+              ${v.status === 'available'
+                ? `<button class="btn btn-primary btn-sm" onclick="openBookingModal(${v.id}, '${v.name.replace(/'/g, "\\'")}', '${getVehicleImageUrl(v.image)}')">จอง</button>`
+                : ''}
+            </div>
+          </div>
+        </div>
       `).join('');
     }
 
@@ -203,9 +196,10 @@
       `).join('');
     }
 
-    function openBookingModal(id, name) {
+    function openBookingModal(id, name, image) {
       document.getElementById('bookingVehicleId').value = id;
       document.getElementById('bookingVehicleName').value = name;
+      document.getElementById('bookingVehicleImage').src = image || '/images/car-placeholder.svg';
       document.getElementById('startDate').value = '';
       document.getElementById('endDate').value = '';
       document.getElementById('purpose').value = '';

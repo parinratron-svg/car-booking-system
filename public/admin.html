@@ -28,7 +28,7 @@
     <div class="tab-content active" id="tab-vehicles">
       <div class="card">
         <h2>เพิ่มข้อมูลรถใหม่</h2>
-        <form id="addVehicleForm">
+        <form id="addVehicleForm" enctype="multipart/form-data">
           <div class="form-row">
             <div class="form-group">
               <label>ชื่อรถ *</label>
@@ -55,6 +55,16 @@
                 <option value="available">ว่าง</option>
                 <option value="unavailable">ไม่ว่าง</option>
               </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>รูปรถ (เลือกจากเครื่อง)</label>
+            <div class="file-input-wrapper">
+              <label class="file-input-label">
+                📷 เลือกไฟล์รูปภาพ (JPG, PNG, GIF, WEBP ไม่เกิน 5MB)
+                <input type="file" id="vImage" accept="image/jpeg,image/png,image/gif,image/webp" onchange="previewImageFile(this, 'imagePreview')">
+              </label>
+              <img id="imagePreview" class="image-preview hidden" src="/images/car-placeholder.svg" alt="ตัวอย่างรูปรถ">
             </div>
           </div>
           <button type="submit" class="btn btn-success">เพิ่มรถ</button>
@@ -97,6 +107,7 @@
           <table>
             <thead>
               <tr>
+                <th>รูป</th>
                 <th>ชื่อรถ</th>
                 <th>ทะเบียน</th>
                 <th>ประเภท</th>
@@ -144,6 +155,7 @@
           <table>
             <thead>
               <tr>
+                <th>รูป</th>
                 <th>ชื่อรถ</th>
                 <th>ทะเบียน</th>
                 <th>ประเภท</th>
@@ -215,15 +227,32 @@
     document.getElementById('addVehicleForm').addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const result = await apiRequest('/vehicles', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: document.getElementById('vName').value.trim(),
-          license_plate: document.getElementById('vPlate').value.trim(),
-          vehicle_type: document.getElementById('vType').value,
-          status: document.getElementById('vStatus').value,
-        }),
-      });
+      const name = document.getElementById('vName').value.trim();
+      const licensePlate = document.getElementById('vPlate').value.trim();
+      const vehicleType = document.getElementById('vType').value;
+      const status = document.getElementById('vStatus').value;
+      const imageFile = document.getElementById('vImage').files[0];
+
+      if (!vehicleType) {
+        showAlert('alertBox', 'กรุณาเลือกประเภทรถ');
+        return;
+      }
+
+      if (!name || !licensePlate) {
+        showAlert('alertBox', 'กรุณากรอกชื่อรถและทะเบียนรถ');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('name', name);
+      formData.append('license_plate', licensePlate);
+      formData.append('vehicle_type', vehicleType);
+      formData.append('status', status);
+      if (imageFile) {
+        formData.append('image', imageFile);
+      }
+
+      const result = await apiFormRequest('/vehicles', formData);
 
       if (!result) return;
 
@@ -231,6 +260,7 @@
 
       if (result.success) {
         document.getElementById('addVehicleForm').reset();
+        document.getElementById('imagePreview').classList.add('hidden');
         loadVehicles();
       }
     });
@@ -251,12 +281,13 @@
       document.getElementById('vehicleCount').textContent = result.total;
       document.getElementById('vehicleTable').innerHTML = result.data.map((v) => `
         <tr>
+          <td><img class="vehicle-img" src="${getVehicleImageUrl(v.image)}" alt="${v.name}"></td>
           <td>${v.name}</td>
           <td>${v.license_plate}</td>
           <td>${getVehicleTypeLabel(v.vehicle_type)}</td>
           <td>${getStatusBadge(v.status)}</td>
           <td>
-            <button class="btn btn-danger btn-sm" onclick="deleteVehicle(${v.id}, '${v.name}')">ลบ</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteVehicle(${v.id}, '${v.name.replace(/'/g, "\\'")}')">ลบ</button>
           </td>
         </tr>
       `).join('');
@@ -348,6 +379,7 @@
 
       document.getElementById('reportAllVehicles').innerHTML = allVehicles.items.map((v) => `
         <tr>
+          <td><img class="vehicle-img" src="${getVehicleImageUrl(v.image)}" alt="${v.name}"></td>
           <td>${v.name}</td>
           <td>${v.license_plate}</td>
           <td>${getVehicleTypeLabel(v.vehicle_type)}</td>

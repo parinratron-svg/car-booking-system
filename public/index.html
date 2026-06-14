@@ -8,23 +8,62 @@
 </head>
 <body>
   <div class="login-page">
-    <div class="login-card">
+    <div class="login-card login-card-wide">
       <h1>🚗 ระบบจองรถ</h1>
       <p class="subtitle">Car Booking System</p>
 
       <div id="alertBox"></div>
 
-      <form id="loginForm">
-        <div class="form-group">
-          <label for="username">Username</label>
-          <input type="text" id="username" class="form-control" placeholder="กรอก Username" required>
-        </div>
-        <div class="form-group">
-          <label for="password">Password</label>
-          <input type="password" id="password" class="form-control" placeholder="กรอก Password" required>
-        </div>
-        <button type="submit" class="btn btn-primary btn-block">เข้าสู่ระบบ</button>
-      </form>
+      <div class="tabs auth-tabs">
+        <button type="button" class="tab active" data-tab="login">เข้าสู่ระบบ</button>
+        <button type="button" class="tab" data-tab="register">สมัครสมาชิก</button>
+      </div>
+
+      <!-- Login -->
+      <div class="tab-content active" id="tab-login">
+        <form id="loginForm">
+          <div class="form-group">
+            <label for="username">Username หรือ Email</label>
+            <input type="text" id="username" class="form-control" placeholder="กรอก Username หรือ Email" required>
+          </div>
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" class="form-control" placeholder="กรอก Password" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">เข้าสู่ระบบ</button>
+        </form>
+      </div>
+
+      <!-- Register -->
+      <div class="tab-content" id="tab-register">
+        <form id="registerForm">
+          <div class="form-group">
+            <label for="regUsername">Username *</label>
+            <input type="text" id="regUsername" class="form-control" placeholder="ตั้ง Username" required>
+          </div>
+          <div class="form-group">
+            <label for="regFullName">ชื่อ-นามสกุล *</label>
+            <input type="text" id="regFullName" class="form-control" placeholder="เช่น สมชาย ใจดี" required>
+          </div>
+          <div class="form-group">
+            <label for="regEmail">อีเมล *</label>
+            <input type="email" id="regEmail" class="form-control" placeholder="example@email.com" required>
+          </div>
+          <div class="form-group">
+            <label for="regPhone">เบอร์โทร *</label>
+            <input type="tel" id="regPhone" class="form-control" placeholder="0812345678" required>
+          </div>
+          <div class="form-group">
+            <label for="regPassword">Password *</label>
+            <input type="password" id="regPassword" class="form-control" placeholder="อย่างน้อย 6 ตัวอักษร" required minlength="6">
+          </div>
+          <div class="form-group">
+            <label for="regConfirmPassword">ยืนยัน Password *</label>
+            <input type="password" id="regConfirmPassword" class="form-control" placeholder="กรอก Password อีกครั้ง" required minlength="6">
+          </div>
+          <button type="submit" class="btn btn-success btn-block">สมัครสมาชิก</button>
+        </form>
+      </div>
 
       <div class="demo-accounts">
         <strong>บัญชีทดสอบ:</strong><br>
@@ -41,24 +80,78 @@
       window.location.href = user.role === 'admin' ? '/admin.html' : '/dashboard.html';
     }
 
+    document.querySelectorAll('.auth-tabs .tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.auth-tabs .tab').forEach((t) => t.classList.remove('active'));
+        document.querySelectorAll('.login-card .tab-content').forEach((c) => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+        document.getElementById('alertBox').innerHTML = '';
+      });
+    });
+
+    function redirectByRole(user, token) {
+      setAuth(token, user);
+      window.location.href = user.role === 'admin' ? '/admin.html' : '/dashboard.html';
+    }
+
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const username = document.getElementById('username').value.trim();
-      const password = document.getElementById('password').value;
+      try {
+        const result = await apiRequest('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({
+            username: document.getElementById('username').value.trim(),
+            password: document.getElementById('password').value,
+          }),
+        });
 
-      const result = await apiRequest('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ username, password }),
-      });
+        if (!result) return;
 
-      if (!result) return;
+        if (result.success) {
+          redirectByRole(result.data.user, result.data.token);
+        } else {
+          showAlert('alertBox', result.message);
+        }
+      } catch (err) {
+        showAlert('alertBox', 'เกิดข้อผิดพลาด กรุณาลองใหม่');
+      }
+    });
 
-      if (result.success) {
-        setAuth(result.data.token, result.data.user);
-        window.location.href = result.data.user.role === 'admin' ? '/admin.html' : '/dashboard.html';
-      } else {
-        showAlert('alertBox', result.message);
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const password = document.getElementById('regPassword').value;
+      const confirmPassword = document.getElementById('regConfirmPassword').value;
+
+      if (password !== confirmPassword) {
+        showAlert('alertBox', 'รหัสผ่านไม่ตรงกัน');
+        return;
+      }
+
+      try {
+        const result = await apiRequest('/auth/register', {
+          method: 'POST',
+          body: JSON.stringify({
+            username: document.getElementById('regUsername').value.trim(),
+            full_name: document.getElementById('regFullName').value.trim(),
+            email: document.getElementById('regEmail').value.trim(),
+            phone: document.getElementById('regPhone').value.trim(),
+            password,
+          }),
+        });
+
+        if (!result) return;
+
+        if (result.success) {
+          showAlert('alertBox', result.message, 'success');
+          setTimeout(() => redirectByRole(result.data.user, result.data.token), 800);
+        } else {
+          showAlert('alertBox', result.message);
+        }
+      } catch (err) {
+        showAlert('alertBox', 'เกิดข้อผิดพลาด กรุณาลองใหม่');
       }
     });
   </script>

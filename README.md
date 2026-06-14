@@ -1,4 +1,4 @@
-# ระบบจองรถ (Car Booking System)
+# ระบบจองรถ (Car Booking System)นน
 
 ระบบจองรถออนไลน์ที่พัฒนาขึ้นเพื่อให้ผู้ใช้งานสามารถตรวจสอบรถที่พร้อมใช้งาน ทำการจองผ่านออนไลน์ และช่วยติดตามจัดการข้อมูลการใช้งานรถ
 
@@ -73,8 +73,8 @@ car-booking-system/
 |--------|----------|----------|
 | GET | `/api/vehicles?search=&type=&status=` | ดึงข้อมูลรถ (Search + Filter) |
 | GET | `/api/vehicles/:id` | ดึงข้อมูลรถคันเดียว |
-| POST | `/api/vehicles` | เพิ่มรถใหม่ (Admin) |
-| PUT | `/api/vehicles/:id` | แก้ไขข้อมูลรถ (Admin) |
+| POST | `/api/vehicles` | เพิ่มรถใหม่พร้อมรูปภาพ (Admin, multipart/form-data) |
+| PUT | `/api/vehicles/:id` | แก้ไขข้อมูลรถและรูปภาพ (Admin) |
 | DELETE | `/api/vehicles/:id` | ลบรถ (Admin) |
 
 ### Bookings
@@ -124,12 +124,15 @@ curl -X POST http://localhost:3000/api/auth/login \
   -d '{"username":"admin","password":"admin123"}'
 ```
 
-### เพิ่มรถ (ต้องมี Token)
+### เพิ่มรถพร้อมรูปภาพ (ต้องมี Token)
 ```bash
 curl -X POST http://localhost:3000/api/vehicles \
-  -H "Content-Type: application/json" \
   -H "Authorization: Bearer <TOKEN>" \
-  -d '{"name":"Toyota Yaris","license_plate":"กท-9999","vehicle_type":"sedan","status":"available"}'
+  -F "name=Toyota Yaris" \
+  -F "license_plate=กท-9999" \
+  -F "vehicle_type=sedan" \
+  -F "status=available" \
+  -F "image=@/path/to/car-photo.jpg"
 ```
 
 ### ค้นหาและกรองรถ
@@ -149,7 +152,7 @@ curl http://localhost:3000/api/reports \
 ระบบใช้ SQLite มี 4 ตารางหลัก:
 
 - **users** - ข้อมูลผู้ใช้งาน (username, password, role)
-- **vehicles** - ข้อมูลรถ (ชื่อ, ทะเบียน, ประเภท, สถานะ)
+- **vehicles** - ข้อมูลรถ (ชื่อ, ทะเบียน, ประเภท, สถานะ, รูปภาพ)
 - **bookings** - รายการจอง (ผู้จอง, รถ, วันที่, สถานะ)
 - **activity_logs** - บันทึกการใช้งานทุกครั้ง (NFR-02)
 

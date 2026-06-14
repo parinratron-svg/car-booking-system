@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const multer = require('multer');
 const { initDatabase } = require('./database');
 
 const authRoutes = require('./routes/auth');
@@ -22,6 +23,19 @@ app.use('/api/reports', reportRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'ระบบจองรถทำงานปกติ', timestamp: new Date().toISOString() });
+});
+
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    const messages = {
+      LIMIT_FILE_SIZE: 'ไฟล์รูปภาพต้องไม่เกิน 5MB',
+    };
+    return res.status(400).json({ success: false, message: messages[err.code] || err.message });
+  }
+  if (err) {
+    return res.status(400).json({ success: false, message: err.message });
+  }
+  next();
 });
 
 async function startServer() {

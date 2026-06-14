@@ -55,6 +55,55 @@ async function apiRequest(endpoint, options = {}) {
   return data;
 }
 
+async function apiFormRequest(endpoint, formData, method = 'POST') {
+  const token = getToken();
+
+  try {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+      method,
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    });
+
+    let data;
+    try {
+      data = await response.json();
+    } catch (e) {
+      return { success: false, message: 'เกิดข้อผิดพลาดจากเซิร์ฟเวอร์ กรุณารีสตาร์ท server แล้วลองใหม่' };
+    }
+
+    if (response.status === 401) {
+      clearAuth();
+      window.location.href = '/index.html';
+      return null;
+    }
+
+    return data;
+  } catch (err) {
+    return { success: false, message: 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้' };
+  }
+}
+
+function getVehicleImageUrl(image) {
+  return image || '/images/car-placeholder.svg';
+}
+
+function previewImageFile(input, previewId) {
+  const preview = document.getElementById(previewId);
+  if (!preview) return;
+
+  const file = input.files[0];
+  if (file) {
+    preview.src = URL.createObjectURL(file);
+    preview.classList.remove('hidden');
+  } else {
+    preview.src = '/images/car-placeholder.svg';
+    preview.classList.add('hidden');
+  }
+}
+
 function showAlert(containerId, message, type = 'error') {
   const container = document.getElementById(containerId);
   if (!container) return;

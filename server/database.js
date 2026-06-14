@@ -23,10 +23,14 @@ async function initDatabase() {
       username TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
       full_name TEXT NOT NULL,
+      email TEXT UNIQUE,
+      phone TEXT,
       role TEXT NOT NULL CHECK(role IN ('user', 'admin')),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  migrateUsersTable();
 
   db.run(`
     CREATE TABLE IF NOT EXISTS vehicles (
@@ -35,10 +39,13 @@ async function initDatabase() {
       license_plate TEXT UNIQUE NOT NULL,
       vehicle_type TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'available' CHECK(status IN ('available', 'unavailable')),
+      image TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  migrateVehiclesTable();
 
   db.run(`
     CREATE TABLE IF NOT EXISTS bookings (
@@ -72,6 +79,25 @@ async function initDatabase() {
   return db;
 }
 
+function migrateUsersTable() {
+  const columns = db.exec('PRAGMA table_info(users)');
+  const columnNames = columns[0]?.values.map((row) => row[1]) || [];
+  if (!columnNames.includes('email')) {
+    db.run('ALTER TABLE users ADD COLUMN email TEXT');
+  }
+  if (!columnNames.includes('phone')) {
+    db.run('ALTER TABLE users ADD COLUMN phone TEXT');
+  }
+}
+
+function migrateVehiclesTable() {
+  const columns = db.exec("PRAGMA table_info(vehicles)");
+  const columnNames = columns[0]?.values.map((row) => row[1]) || [];
+  if (!columnNames.includes('image')) {
+    db.run('ALTER TABLE vehicles ADD COLUMN image TEXT');
+  }
+}
+
 function seedData() {
   const userCount = db.exec('SELECT COUNT(*) as count FROM users')[0]?.values[0][0] || 0;
   if (userCount > 0) return;
@@ -80,16 +106,16 @@ function seedData() {
   const userPassword = bcrypt.hashSync('user123', 10);
 
   db.run(
-    'INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)',
-    ['admin', adminPassword, 'ผู้ดูแลระบบ', 'admin']
+    'INSERT INTO users (username, password, full_name, email, phone, role) VALUES (?, ?, ?, ?, ?, ?)',
+    ['admin', adminPassword, 'ผู้ดูแลระบบ', 'admin@carbooking.local', '0800000000', 'admin']
   );
   db.run(
-    'INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)',
-    ['user1', userPassword, 'สมชาย ใจดี', 'user']
+    'INSERT INTO users (username, password, full_name, email, phone, role) VALUES (?, ?, ?, ?, ?, ?)',
+    ['user1', userPassword, 'สมชาย ใจดี', 'user1@carbooking.local', '0812345678', 'user']
   );
   db.run(
-    'INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)',
-    ['user2', userPassword, 'สมหญิง รักเรียน', 'user']
+    'INSERT INTO users (username, password, full_name, email, phone, role) VALUES (?, ?, ?, ?, ?, ?)',
+    ['user2', userPassword, 'สมหญิง รักเรียน', 'user2@carbooking.local', '0898765432', 'user']
   );
 
   const vehicles = [
@@ -105,8 +131,8 @@ function seedData() {
 
   vehicles.forEach(([name, plate, type, status]) => {
     db.run(
-      'INSERT INTO vehicles (name, license_plate, vehicle_type, status) VALUES (?, ?, ?, ?)',
-      [name, plate, type, status]
+      'INSERT INTO vehicles (name, license_plate, vehicle_type, status, image) VALUES (?, ?, ?, ?, ?)',
+      [name, plate, type, status, null]
     );
   });
 
@@ -145,8 +171,9 @@ function queryOne(sql, params = []) {
 
 function run(sql, params = []) {
   db.run(sql, params);
+  const lastId = getLastInsertId();
   saveDatabase();
-  return { changes: db.getRowsModified(), lastId: getLastInsertId() };
+  return { changes: db.getRowsModified(), lastId };
 }
 
 function getLastInsertId() {
