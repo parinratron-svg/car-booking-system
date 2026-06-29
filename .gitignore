@@ -1,5 +1,4 @@
 node_modules/
-server/database.sqlite
 public/uploads/vehicles/*
 !public/uploads/vehicles/.gitkeep
 .env

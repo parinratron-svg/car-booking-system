@@ -5,7 +5,7 @@ const { upload, deleteVehicleImage, getImagePath } = require('../middleware/uplo
 
 const router = express.Router();
 
-function handleCreateVehicle(req, res) {
+async function handleCreateVehicle(req, res) {
   try {
     const { name, license_plate, vehicle_type, status } = req.body;
 
@@ -17,7 +17,7 @@ function handleCreateVehicle(req, res) {
       });
     }
 
-    const existing = queryOne('SELECT id FROM vehicles WHERE license_plate = ?', [license_plate.trim()]);
+    const existing = await queryOne('SELECT id FROM vehicles WHERE license_plate = ?', [license_plate.trim()]);
     if (existing) {
       if (req.file) deleteVehicleImage(getImagePath(req.file.filename));
       return res.status(409).json({
@@ -38,14 +38,14 @@ function handleCreateVehicle(req, res) {
     const vehicleStatus = status || 'available';
     const imagePath = req.file ? getImagePath(req.file.filename) : null;
 
-    const result = run(
+    const result = await run(
       'INSERT INTO vehicles (name, license_plate, vehicle_type, status, image) VALUES (?, ?, ?, ?, ?)',
       [name.trim(), license_plate.trim(), vehicle_type, vehicleStatus, imagePath]
     );
 
-    const vehicle = queryOne('SELECT * FROM vehicles WHERE id = ?', [result.lastId]);
+    const vehicle = await queryOne('SELECT * FROM vehicles WHERE id = ?', [result.lastId]);
 
-    logActivity(req.user.id, 'CREATE_VEHICLE', `เพิ่มรถ: ${name} (${license_plate})`);
+    await logActivity(req.user.id, 'CREATE_VEHICLE', `เพิ่มรถ: ${name} (${license_plate})`);
 
     res.status(201).json({
       success: true,
@@ -58,66 +58,74 @@ function handleCreateVehicle(req, res) {
   }
 }
 
-router.get('/', authenticateToken, (req, res) => {
-  const { search, type, status } = req.query;
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    const { search, type, status } = req.query;
 
-  let sql = 'SELECT * FROM vehicles WHERE 1=1';
-  const params = [];
+    let sql = 'SELECT * FROM vehicles WHERE 1=1';
+    const params = [];
 
-  if (search) {
-    sql += ' AND (name LIKE ? OR license_plate LIKE ?)';
-    params.push(`%${search}%`, `%${search}%`);
+    if (search) {
+      sql += ' AND (name LIKE ? OR license_plate LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`);
+    }
+
+    if (type) {
+      sql += ' AND vehicle_type = ?';
+      params.push(type);
+    }
+
+    if (status) {
+      sql += ' AND status = ?';
+      params.push(status);
+    }
+
+    sql += ' ORDER BY created_at DESC';
+
+    const vehicles = await queryAll(sql, params);
+
+    await logActivity(req.user.id, 'GET_VEHICLES', `ดึงข้อมูลรถ ${vehicles.length} คัน`);
+
+    res.json({
+      success: true,
+      message: 'ดึงข้อมูลรถสำเร็จ',
+      data: vehicles,
+      total: vehicles.length,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
-
-  if (type) {
-    sql += ' AND vehicle_type = ?';
-    params.push(type);
-  }
-
-  if (status) {
-    sql += ' AND status = ?';
-    params.push(status);
-  }
-
-  sql += ' ORDER BY created_at DESC';
-
-  const vehicles = queryAll(sql, params);
-
-  logActivity(req.user.id, 'GET_VEHICLES', `ดึงข้อมูลรถ ${vehicles.length} คัน`);
-
-  res.json({
-    success: true,
-    message: 'ดึงข้อมูลรถสำเร็จ',
-    data: vehicles,
-    total: vehicles.length,
-  });
 });
 
-router.get('/:id', authenticateToken, (req, res) => {
-  const vehicle = queryOne('SELECT * FROM vehicles WHERE id = ?', [req.params.id]);
+router.get('/:id', authenticateToken, async (req, res) => {
+  try {
+    const vehicle = await queryOne('SELECT * FROM vehicles WHERE id = ?', [req.params.id]);
 
-  if (!vehicle) {
-    return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลรถ' });
+    if (!vehicle) {
+      return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลรถ' });
+    }
+
+    res.json({ success: true, data: vehicle });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
-
-  res.json({ success: true, data: vehicle });
 });
 
 // Create Vehicle - multer อ่าน multipart เสมอ (รองรับทั้งมี/ไม่มีรูป)
 router.post('/', authenticateToken, requireAdmin, (req, res, next) => {
-  upload.single('image')(req, res, (err) => {
+  upload.single('image')(req, res, async (err) => {
     if (err) return next(err);
-    handleCreateVehicle(req, res);
+    await handleCreateVehicle(req, res);
   });
 });
 
 router.put('/:id', authenticateToken, requireAdmin, (req, res, next) => {
   const contentType = req.headers['content-type'] || '';
 
-  const updateHandler = (req, res) => {
+  const updateHandler = async (req, res) => {
     try {
       const { name, license_plate, vehicle_type, status } = req.body;
-      const vehicle = queryOne('SELECT * FROM vehicles WHERE id = ?', [req.params.id]);
+      const vehicle = await queryOne('SELECT * FROM vehicles WHERE id = ?', [req.params.id]);
 
       if (!vehicle) {
         if (req.file) deleteVehicleImage(getImagePath(req.file.filename));
@@ -130,7 +138,7 @@ router.put('/:id', authenticateToken, requireAdmin, (req, res, next) => {
         imagePath = getImagePath(req.file.filename);
       }
 
-      run(
+      await run(
         `UPDATE vehicles SET name = ?, license_plate = ?, vehicle_type = ?, status = ?, image = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         [
           (name || vehicle.name).trim(),
@@ -142,8 +150,8 @@ router.put('/:id', authenticateToken, requireAdmin, (req, res, next) => {
         ]
       );
 
-      const updated = queryOne('SELECT * FROM vehicles WHERE id = ?', [req.params.id]);
-      logActivity(req.user.id, 'UPDATE_VEHICLE', `แก้ไขรถ ID: ${req.params.id}`);
+      const updated = await queryOne('SELECT * FROM vehicles WHERE id = ?', [req.params.id]);
+      await logActivity(req.user.id, 'UPDATE_VEHICLE', `แก้ไขรถ ID: ${req.params.id}`);
 
       res.json({ success: true, message: 'แก้ไขข้อมูลรถสำเร็จ', data: updated });
     } catch (error) {
@@ -162,18 +170,22 @@ router.put('/:id', authenticateToken, requireAdmin, (req, res, next) => {
   }
 });
 
-router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
-  const vehicle = queryOne('SELECT * FROM vehicles WHERE id = ?', [req.params.id]);
+router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const vehicle = await queryOne('SELECT * FROM vehicles WHERE id = ?', [req.params.id]);
 
-  if (!vehicle) {
-    return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลรถ' });
+    if (!vehicle) {
+      return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลรถ' });
+    }
+
+    deleteVehicleImage(vehicle.image);
+    await run('DELETE FROM vehicles WHERE id = ?', [req.params.id]);
+    await logActivity(req.user.id, 'DELETE_VEHICLE', `ลบรถ: ${vehicle.name} (${vehicle.license_plate})`);
+
+    res.json({ success: true, message: 'ลบข้อมูลรถสำเร็จ' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
-
-  deleteVehicleImage(vehicle.image);
-  run('DELETE FROM vehicles WHERE id = ?', [req.params.id]);
-  logActivity(req.user.id, 'DELETE_VEHICLE', `ลบรถ: ${vehicle.name} (${vehicle.license_plate})`);
-
-  res.json({ success: true, message: 'ลบข้อมูลรถสำเร็จ' });
 });
 
 module.exports = router;

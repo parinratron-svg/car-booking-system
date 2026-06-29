@@ -1,119 +1,112 @@
-const initSqlJs = require('sql.js');
-const fs = require('fs');
-const path = require('path');
+const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
 
-const DB_PATH = path.join(__dirname, 'database.sqlite');
-
-let db = null;
+let pool = null;
 
 async function initDatabase() {
-  const SQL = await initSqlJs();
+  const {
+    DB_HOST = 'db',
+    DB_PORT = 3306,
+    DB_USER = 'root',
+    DB_PASSWORD = 'rootpassword',
+    DB_NAME = 'car_booking_db',
+  } = process.env;
 
-  if (fs.existsSync(DB_PATH)) {
-    const buffer = fs.readFileSync(DB_PATH);
-    db = new SQL.Database(buffer);
-  } else {
-    db = new SQL.Database();
-  }
+  const rootConnection = await mysql.createConnection({
+    host: DB_HOST,
+    port: DB_PORT,
+    user: DB_USER,
+    password: DB_PASSWORD,
+  });
 
-  db.run(`
+  await rootConnection.query(`CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
+  await rootConnection.end();
+
+  pool = mysql.createPool({
+    host: DB_HOST,
+    port: DB_PORT,
+    user: DB_USER,
+    password: DB_PASSWORD,
+    database: DB_NAME,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+  });
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      full_name TEXT NOT NULL,
-      email TEXT UNIQUE,
-      phone TEXT,
-      role TEXT NOT NULL CHECK(role IN ('user', 'admin')),
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      username VARCHAR(50) NOT NULL UNIQUE,
+      password VARCHAR(255) NOT NULL,
+      full_name VARCHAR(100) NOT NULL,
+      email VARCHAR(255),
+      phone VARCHAR(20),
+      role ENUM('user', 'admin') NOT NULL DEFAULT 'user',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
-  migrateUsersTable();
-
-  db.run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS vehicles (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      license_plate TEXT UNIQUE NOT NULL,
-      vehicle_type TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'available' CHECK(status IN ('available', 'unavailable')),
-      image TEXT,
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      license_plate VARCHAR(50) NOT NULL UNIQUE,
+      vehicle_type VARCHAR(50) NOT NULL,
+      status ENUM('available', 'unavailable') NOT NULL DEFAULT 'available',
+      image VARCHAR(255),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )
   `);
 
-  migrateVehiclesTable();
-
-  db.run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS bookings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      vehicle_id INTEGER NOT NULL,
-      start_date TEXT NOT NULL,
-      end_date TEXT NOT NULL,
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      vehicle_id INT NOT NULL,
+      start_date DATE NOT NULL,
+      end_date DATE NOT NULL,
       purpose TEXT,
-      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected', 'cancelled')),
+      status ENUM('pending', 'approved', 'rejected', 'cancelled') NOT NULL DEFAULT 'pending',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id),
       FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
     )
   `);
 
-  db.run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS activity_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER,
-      action TEXT NOT NULL,
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT,
+      action VARCHAR(50) NOT NULL,
       details TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id)
     )
   `);
 
-  seedData();
-  saveDatabase();
-  return db;
+  await seedData();
+  return pool;
 }
 
-function migrateUsersTable() {
-  const columns = db.exec('PRAGMA table_info(users)');
-  const columnNames = columns[0]?.values.map((row) => row[1]) || [];
-  if (!columnNames.includes('email')) {
-    db.run('ALTER TABLE users ADD COLUMN email TEXT');
-  }
-  if (!columnNames.includes('phone')) {
-    db.run('ALTER TABLE users ADD COLUMN phone TEXT');
-  }
-}
-
-function migrateVehiclesTable() {
-  const columns = db.exec("PRAGMA table_info(vehicles)");
-  const columnNames = columns[0]?.values.map((row) => row[1]) || [];
-  if (!columnNames.includes('image')) {
-    db.run('ALTER TABLE vehicles ADD COLUMN image TEXT');
-  }
-}
-
-function seedData() {
-  const userCount = db.exec('SELECT COUNT(*) as count FROM users')[0]?.values[0][0] || 0;
+async function seedData() {
+  const [rows] = await pool.query('SELECT COUNT(*) as count FROM users');
+  const userCount = rows[0]?.count || 0;
   if (userCount > 0) return;
 
   const adminPassword = bcrypt.hashSync('admin123', 10);
   const userPassword = bcrypt.hashSync('user123', 10);
 
-  db.run(
+  await pool.query(
     'INSERT INTO users (username, password, full_name, email, phone, role) VALUES (?, ?, ?, ?, ?, ?)',
     ['admin', adminPassword, 'ผู้ดูแลระบบ', 'admin@carbooking.local', '0800000000', 'admin']
   );
-  db.run(
+  await pool.query(
     'INSERT INTO users (username, password, full_name, email, phone, role) VALUES (?, ?, ?, ?, ?, ?)',
     ['user1', userPassword, 'สมชาย ใจดี', 'user1@carbooking.local', '0812345678', 'user']
   );
-  db.run(
+  await pool.query(
     'INSERT INTO users (username, password, full_name, email, phone, role) VALUES (?, ?, ?, ?, ?, ?)',
     ['user2', userPassword, 'สมหญิง รักเรียน', 'user2@carbooking.local', '0898765432', 'user']
   );
@@ -129,56 +122,36 @@ function seedData() {
     ['Ford Ranger', 'กญ-5566', 'pickup', 'unavailable'],
   ];
 
-  vehicles.forEach(([name, plate, type, status]) => {
-    db.run(
+  for (const [name, plate, type, status] of vehicles) {
+    await pool.query(
       'INSERT INTO vehicles (name, license_plate, vehicle_type, status, image) VALUES (?, ?, ?, ?, ?)',
       [name, plate, type, status, null]
     );
-  });
+  }
 
-  logActivity(null, 'SYSTEM_INIT', 'ระบบเริ่มต้นพร้อมข้อมูลตัวอย่าง');
+  await logActivity(null, 'SYSTEM_INIT', 'ระบบเริ่มต้นพร้อมข้อมูลตัวอย่าง');
 }
 
-function saveDatabase() {
-  const data = db.export();
-  const buffer = Buffer.from(data);
-  fs.writeFileSync(DB_PATH, buffer);
+async function queryAll(sql, params = []) {
+  const [rows] = await pool.query(sql, params);
+  return rows;
 }
 
-function logActivity(userId, action, details) {
-  db.run(
+async function queryOne(sql, params = []) {
+  const rows = await queryAll(sql, params);
+  return rows[0] || null;
+}
+
+async function run(sql, params = []) {
+  const [result] = await pool.query(sql, params);
+  return { changes: result.affectedRows, lastId: result.insertId };
+}
+
+async function logActivity(userId, action, details) {
+  await pool.query(
     'INSERT INTO activity_logs (user_id, action, details) VALUES (?, ?, ?)',
     [userId, action, details]
   );
-  saveDatabase();
-}
-
-function queryAll(sql, params = []) {
-  const stmt = db.prepare(sql);
-  stmt.bind(params);
-  const results = [];
-  while (stmt.step()) {
-    results.push(stmt.getAsObject());
-  }
-  stmt.free();
-  return results;
-}
-
-function queryOne(sql, params = []) {
-  const results = queryAll(sql, params);
-  return results[0] || null;
-}
-
-function run(sql, params = []) {
-  db.run(sql, params);
-  const lastId = getLastInsertId();
-  saveDatabase();
-  return { changes: db.getRowsModified(), lastId };
-}
-
-function getLastInsertId() {
-  const result = db.exec('SELECT last_insert_rowid() as id');
-  return result[0]?.values[0][0] || null;
 }
 
 module.exports = {
@@ -187,5 +160,4 @@ module.exports = {
   queryOne,
   run,
   logActivity,
-  saveDatabase,
 };

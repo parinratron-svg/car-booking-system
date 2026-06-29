@@ -42,7 +42,7 @@ function isValidPhone(phone) {
 }
 
 // สมัครสมาชิก
-router.post('/register', (req, res) => {
+router.post('/register', async (req, res) => {
   const { username, password, full_name, email, phone } = req.body;
 
   if (!username || !password || !full_name || !email || !phone) {
@@ -74,7 +74,7 @@ router.post('/register', (req, res) => {
     });
   }
 
-  const existingUsername = queryOne('SELECT id FROM users WHERE username = ?', [username.trim()]);
+  const existingUsername = await queryOne('SELECT id FROM users WHERE username = ?', [username.trim()]);
   if (existingUsername) {
     return res.status(409).json({
       success: false,
@@ -82,7 +82,7 @@ router.post('/register', (req, res) => {
     });
   }
 
-  const existingEmail = queryOne('SELECT id FROM users WHERE email = ?', [email.trim().toLowerCase()]);
+  const existingEmail = await queryOne('SELECT id FROM users WHERE email = ?', [email.trim().toLowerCase()]);
   if (existingEmail) {
     return res.status(409).json({
       success: false,
@@ -91,14 +91,14 @@ router.post('/register', (req, res) => {
   }
 
   const hashedPassword = bcrypt.hashSync(password, 10);
-  const result = run(
+  const result = await run(
     'INSERT INTO users (username, password, full_name, email, phone, role) VALUES (?, ?, ?, ?, ?, ?)',
     [username.trim(), hashedPassword, full_name.trim(), email.trim().toLowerCase(), cleanPhone, 'user']
   );
 
-  const user = queryOne('SELECT * FROM users WHERE id = ?', [result.lastId]);
+  const user = await queryOne('SELECT * FROM users WHERE id = ?', [result.lastId]);
 
-  logActivity(user.id, 'REGISTER', `สมัครสมาชิก: ${username}`);
+  await logActivity(user.id, 'REGISTER', `สมัครสมาชิก: ${username}`);
 
   res.status(201).json({
     success: true,
@@ -108,7 +108,7 @@ router.post('/register', (req, res) => {
 });
 
 // FR-01: Login API (รองรับ username หรือ email)
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   const { username, password } = req.body;
 
   if (!username || !password) {
@@ -119,20 +119,20 @@ router.post('/login', (req, res) => {
   }
 
   const loginId = username.trim();
-  const user = queryOne(
+  const user = await queryOne(
     'SELECT * FROM users WHERE username = ? OR email = ?',
     [loginId, loginId.toLowerCase()]
   );
 
   if (!user || !bcrypt.compareSync(password, user.password)) {
-    logActivity(null, 'LOGIN_FAILED', `พยายามเข้าสู่ระบบด้วย: ${loginId}`);
+    await logActivity(null, 'LOGIN_FAILED', `พยายามเข้าสู่ระบบด้วย: ${loginId}`);
     return res.status(401).json({
       success: false,
       message: 'Username/Email หรือ Password ไม่ถูกต้อง',
     });
   }
 
-  logActivity(user.id, 'LOGIN', 'เข้าสู่ระบบสำเร็จ');
+  await logActivity(user.id, 'LOGIN', 'เข้าสู่ระบบสำเร็จ');
 
   res.json({
     success: true,
@@ -141,14 +141,14 @@ router.post('/login', (req, res) => {
   });
 });
 
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
   if (token) {
     try {
       const user = jwt.verify(token, JWT_SECRET);
-      logActivity(user.id, 'LOGOUT', 'ออกจากระบบ');
+      await logActivity(user.id, 'LOGOUT', 'ออกจากระบบ');
     } catch (e) {
       // token expired, ignore
     }
